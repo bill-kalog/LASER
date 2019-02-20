@@ -14,6 +14,7 @@
 #
 # Simple MLP classifier for sentence embeddings
 
+from comet_ml import Experiment
 
 import argparse
 import copy
@@ -23,9 +24,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data as data_utils
+from IPython import embed
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
 
 
 ################################################
+
 
 def LoadData(bdir, dfn, lfn, dim=1024, bsize=32, shuffle=False, quiet=False):
     x = np.fromfile(bdir + dfn, dtype=np.float32, count=-1)
@@ -34,7 +39,8 @@ def LoadData(bdir, dfn, lfn, dim=1024, bsize=32, shuffle=False, quiet=False):
     lbl = np.loadtxt(bdir + lfn, dtype=np.int32)
     lbl.reshape(lbl.shape[0], 1)
     if not quiet:
-        print(' - read {:d}x{:d} elements in {:s}'.format(x.shape[0], x.shape[1], dfn))
+        print(
+            ' - read {:d}x{:d} elements in {:s}'.format(x.shape[0], x.shape[1], dfn))
         print(' - read {:d} labels [{:d},{:d}] in {:s}'
               .format(lbl.shape[0], lbl.min(), lbl.max(), lfn))
 
@@ -45,7 +51,9 @@ def LoadData(bdir, dfn, lfn, dim=1024, bsize=32, shuffle=False, quiet=False):
 
 ################################################
 
+
 class Net(nn.Module):
+
     def __init__(self, idim=1024, odim=2, nhid=None,
                  dropout=0.0, gpu=0, activation='TANH'):
         super(Net, self).__init__()
@@ -69,7 +77,7 @@ class Net(nn.Module):
                         modules.append(nn.ReLU())
                         print('-{:d}r'.format(nh), end='')
                     else:
-                       raise Exception('Unrecognized activation {activation}')
+                        raise Exception('Unrecognized activation {activation}')
                     if dropout > 0:
                         modules.append(nn.Dropout(p=dropout))
             modules.append(nn.Linear(nprev, odim))
@@ -91,6 +99,9 @@ class Net(nn.Module):
         total = 0
         self.mlp.train(mode=False)
         corr = np.zeros(nlbl, dtype=np.int32)
+
+        total_Y = []
+        total_predictions = []
         for data in dset:
             X, Y = data
             Y = Y.long()
@@ -101,14 +112,25 @@ class Net(nn.Module):
             _, predicted = torch.max(outputs.data, 1)
             total += Y.size(0)
             correct += (predicted == Y).int().sum()
+
+            total_predictions.extend(predicted.tolist())
+            total_Y.extend(Y.tolist())
+
             for i in range(nlbl):
                 corr[i] += (predicted == i).int().sum()
 
         print(' | {:4s}: {:5.2f}%'
-                         .format(name, 100.0 * correct.float() / total), end='')
+              .format(name, 100.0 * correct.float() / total), end='')
+
+        experiment.log_metric(f"accuracy {name}", 100.0 * correct.float() / total)
         print(' | classes:', end='')
         for i in range(nlbl):
             print(' {:5.2f}'.format(100.0 * corr[i] / total), end='')
+        confusion_matrix(total_Y, total_predictions)
+        if "Test" in name:
+            print("\n")
+            print(confusion_matrix(total_Y, total_predictions))
+            print(classification_report(total_Y, total_predictions))
 
         return correct, total
 
@@ -116,8 +138,8 @@ class Net(nn.Module):
 ################################################
 
 parser = argparse.ArgumentParser(
-           formatter_class=argparse.RawDescriptionHelpFormatter,
-           description="Simple sentence classifier")
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    description="Simple sentence classifier")
 
 # Data
 parser.add_argument(
@@ -145,7 +167,7 @@ parser.add_argument(
     '--test-labels', '-E', type=str, required=True, metavar='STR',
     help="Name of test corpus without language extension (labels)")
 parser.add_argument(
-    '--lang', '-L', nargs='+', default=None, 
+    '--lang', '-L', nargs='+', default=None,
     help="List of languages to test on")
 
 # network definition
@@ -153,7 +175,7 @@ parser.add_argument(
     "--dim", "-m", type=int, default=1024,
     help="Dimension of sentence embeddings")
 parser.add_argument(
-    '--nhid', '-n', type=int, default=[0], nargs='+',
+    '--nhid', '-n', type=int, default=0, nargs='+',
     help="List of hidden layer(s) dimensions")
 parser.add_argument(
     "--nb-classes", "-c", type=int, default=2,
@@ -180,6 +202,11 @@ parser.add_argument(
     '--gpu', '-g', type=int, default=-1, metavar='INT',
     help="GPU id (-1 for CPU)")
 args = parser.parse_args()
+
+experiment = Experiment(project_name="general",
+                        workspace="bill_kalog", parse_args=False)
+
+experiment.log_parameters(vars(args))
 
 print(' - base directory: {}'.format(args.base_dir))
 args.base_dir = args.base_dir + "/"
