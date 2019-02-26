@@ -27,7 +27,36 @@ import torch.utils.data as data_utils
 from IPython import embed
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
+import adabound
 
+
+class NoamOpt:
+    "Optim wrapper that implements rate."
+
+    def __init__(self, model_size, factor, warmup, optimizer):
+        self.optimizer = optimizer
+        self._step = 0
+        self.warmup = warmup
+        self.factor = factor
+        self.model_size = model_size
+        self._rate = 0
+
+    def step(self):
+        "Update parameters and rate"
+        self._step += 1
+        rate = self.rate()
+        for p in self.optimizer.param_groups:
+            p['lr'] = rate
+        self._rate = rate
+        self.optimizer.step()
+
+    def rate(self, step=None):
+        "Implement `lrate` above"
+        if step is None:
+            step = self._step
+        return self.factor * \
+            (self.model_size ** (-0.5) *
+             min(step ** (-0.5), step * self.warmup ** (-1.5)))
 
 ################################################
 
@@ -236,12 +265,19 @@ else:
 # default: pytorch/optim/adam.py
 # Py0.4: lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, amsgrad=False):
 # Py1.0: lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, amsgrad=False):
-optimizer = optim.Adam(net.parameters(),
-                       lr=args.lr,
-                       weight_decay=args.wdecay,
-                       betas=(0.9, 0.999),
-                       eps=1e-8,
-                       amsgrad=False)
+# optimizer = optim.Adam(net.parameters(),
+#                        lr=args.lr,
+#                        weight_decay=args.wdecay,
+#                        betas=(0.9, 0.999),
+#                        eps=1e-8,
+#                        amsgrad=False)
+
+# optimizer = adabound.AdaBound(net.parameters(), lr=1e-3, final_lr=0.8)
+
+optimizer = NoamOpt(1024, 1, 4000,
+                    torch.optim.Adam(net.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
+
+# optimizer = optim.SGD(net.parameters(), lr=0.8)
 
 corr_best = 0
 # loop multiple times over the dataset

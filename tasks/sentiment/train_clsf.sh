@@ -13,7 +13,7 @@ mkdir -p $model_folder
 # classifier parameters
 
 
-N=100
+N=200
 lr=0.001
 wd=0.000
 nhid="10 8"
@@ -34,9 +34,9 @@ val_file=stsa.${type}.dev.corpus.embeddings
 test_file=stsa.${type}.test.corpus.embeddings
 
 # test_file=../../mathias_datasets/sentimentData_products.corpus.embeddings
-test_file=../../mathias_datasets/SEB_new.corpus.embeddings
+# test_file=../../mathias_datasets/SEB_new.corpus.embeddings
 
-test_file=../../cmore/cmore_5.embeddings
+# test_file=../../cmore/cmore_5.embeddings
 
 
 
@@ -47,11 +47,13 @@ val_file_labels=stsa.${type}.dev.labels
 test_file_labels=stsa.${type}.test.labels
 
 # test_file_labels=../../mathias_datasets/sentimentData_products.labels
-test_file_labels=../../mathias_datasets/SEB_new.labels
+# test_file_labels=../../mathias_datasets/SEB_new.labels
 
-test_file_labels=../../cmore/cmore_5.labels
+# test_file_labels=../../cmore/cmore_5.labels
 
-lang=sv
+# lang=sv
+lang=en
+
 
 lf="${log_dir}/sst.${type}-28jan.log"
 
@@ -73,7 +75,7 @@ if [ ! -f ${lf} ] ; then
 #   > ${lf}
 CUDA_VISIBLE_DEVICES=3 python3 ${LASER}/source/sent_classif.py \
   --gpu 0 --base-dir ${edir} \
-  --save "${model_folder}/sst_${type}_jan28" \
+  --save "${model_folder}/sst_${type}_feb26" \
   --train ${train_file} \
   --train-labels ${train_file_labels} \
   --dev ${val_file} \
